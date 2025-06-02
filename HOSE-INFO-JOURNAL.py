@@ -271,11 +271,11 @@ def main():
 
         # Create OD/ID Dimension for Expansion
 
-        responde = theUI.NXMessageBox.Show(
+        response_expansion = theUI.NXMessageBox.Show(
             "Create OD/ID Dimension For Expansion", NXOpen.NXMessageBox.DialogType.Question,
             "Do you want to create a OD/ID for expansion?")
 
-        if responde == 1:
+        if response_expansion == 1:
             
             selection = theUI.SelectionManager
 
@@ -376,7 +376,7 @@ def main():
             theSession.DeleteUndoMark(markId1, None)
             pmiRadialDimensionBuilder1.Destroy()
             
-        elif responde == 2:
+        elif response_expansion == 2:
                 response = theUI.NXMessageBox.Show(
                     "Create OD/ID Dimension For Expansion", NXOpen.NXMessageBox.DialogType.Information,
                     "No OD/ID Dimension Created for expansion.")
