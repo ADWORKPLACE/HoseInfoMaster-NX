@@ -279,107 +279,108 @@ def main():
             
             selection = theUI.SelectionManager
 
-        response, selected_objects = theUI.SelectionManager.SelectObjects(
-            'Select Edge', 
-            'Select Edge to Get Diameter', 
-            NXOpen.Selection.SelectionScope.AnyInAssembly, 
-            False, 
-            [NXOpen.Selection.SelectionType.Edges])
+            response, selected_objects = theUI.SelectionManager.SelectObjects(
+                'Select Edge', 
+                'Select Edge to Get Diameter', 
+                NXOpen.Selection.SelectionScope.AnyInAssembly, 
+                False, 
+                [NXOpen.Selection.SelectionType.Edges])
 
-        if response == NXOpen.Selection.Response.Ok and selected_objects:
-            edge = selected_objects[0]
-            vertices = edge.GetVertices()
+            if response == NXOpen.Selection.Response.Ok and selected_objects:
+                edge = selected_objects[0]
+                vertices = edge.GetVertices()
 
-            if len(vertices) >= 2:
-                start_point = vertices[0]
-                end_point = vertices[-1]
-                center_point = NXOpen.Point3d(
+                if len(vertices) >= 2:
+                    start_point = vertices[0]
+                    end_point = vertices[-1]
+                    center_point = NXOpen.Point3d(
+                        (start_point.X + end_point.X)/2,
+                        (start_point.Y + end_point.Y)/2,
+                        (start_point.Z + end_point.Z)/2
+                        )
+                else:
+                    curve = edge.GetGeometry()
+                    start_point = curve.Evaluate(0.0)
+                    end_point = curve.Evaluate(1.0)
+                    center_point = NXOpen.Point3d(
                     (start_point.X + end_point.X)/2,
                     (start_point.Y + end_point.Y)/2,
                     (start_point.Z + end_point.Z)/2
                     )
-            else:
-                curve = edge.GetGeometry()
-                start_point = curve.Evaluate(0.0)
-                end_point = curve.Evaluate(1.0)
-                center_point = NXOpen.Point3d(
-                (start_point.X + end_point.X)/2,
-                (start_point.Y + end_point.Y)/2,
-                (start_point.Z + end_point.Z)/2
-                )
-            
-            markId1 = theSession.SetUndoMark(NXOpen.Session.MarkVisibility.Visible, "Start")
+                
+                markId1 = theSession.SetUndoMark(NXOpen.Session.MarkVisibility.Visible, "Start")
 
-            pmiRadialDimensionBuilder1 = workPart.Dimensions.CreatePmiRadialDimensionBuilder(NXOpen.Annotations.Dimension.Null)
-            pmiRadialDimensionBuilder1.Style.LetteringStyle.DimensionTextSize = 20.5
-            pmiRadialDimensionBuilder1.Style.LetteringStyle.AppendedTextSize = 20.5
-            pmiRadialDimensionBuilder1.Style.LetteringStyle.ToleranceTextSize = 20.5
-            pmiRadialDimensionBuilder1.Style.LetteringStyle.TwoLineToleranceTextSize = 20.5
-            pmiRadialDimensionBuilder1.Style.LineArrowStyle.ArrowheadLength = 20.5
-            pmiRadialDimensionBuilder1.FirstAssociativity.SetValue(edge, workPart.ModelingViews.WorkView, center_point)
+                pmiRadialDimensionBuilder1 = workPart.Dimensions.CreatePmiRadialDimensionBuilder(NXOpen.Annotations.Dimension.Null)
+                pmiRadialDimensionBuilder1.Style.LetteringStyle.DimensionTextSize = 20.5
+                pmiRadialDimensionBuilder1.Style.LetteringStyle.AppendedTextSize = 20.5
+                pmiRadialDimensionBuilder1.Style.LetteringStyle.ToleranceTextSize = 20.5
+                pmiRadialDimensionBuilder1.Style.LetteringStyle.TwoLineToleranceTextSize = 20.5
+                pmiRadialDimensionBuilder1.Style.LineArrowStyle.ArrowheadLength = 20.5
+                pmiRadialDimensionBuilder1.FirstAssociativity.SetValue(edge, workPart.ModelingViews.WorkView, center_point)
 
-            point2 = NXOpen.Point3d(0.0, 0.0, 0.0)
-            pmiRadialDimensionBuilder1.FirstAssociativity.SetValue(NXOpen.InferSnapType.SnapType.NotSet, edge, workPart.ModelingViews.WorkView, center_point, NXOpen.TaggedObject.Null, NXOpen.View.Null, point2)
+                point2 = NXOpen.Point3d(0.0, 0.0, 0.0)
+                pmiRadialDimensionBuilder1.FirstAssociativity.SetValue(NXOpen.InferSnapType.SnapType.NotSet, edge, workPart.ModelingViews.WorkView, center_point, NXOpen.TaggedObject.Null, NXOpen.View.Null, point2)
 
-            objects1 = [NXOpen.NXObject.Null] * 1 
-            objects1[0] = edge
+                objects1 = [NXOpen.NXObject.Null] * 1 
+                objects1[0] = edge
 
-            pmiRadialDimensionBuilder1.AssociatedObjects.Nxobjects.SetArray(objects1)
-            pmiRadialDimensionBuilder1.Origin.Plane.PlaneMethod = NXOpen.Annotations.PlaneBuilder.PlaneMethodType.ModelView
-            pmiRadialDimensionBuilder1.Origin.SetInferRelativeToGeometry(True)
-            nXObject1 = pmiRadialDimensionBuilder1.Commit()
+                pmiRadialDimensionBuilder1.AssociatedObjects.Nxobjects.SetArray(objects1)
+                pmiRadialDimensionBuilder1.Origin.Plane.PlaneMethod = NXOpen.Annotations.PlaneBuilder.PlaneMethodType.ModelView
+                pmiRadialDimensionBuilder1.Origin.SetInferRelativeToGeometry(True)
+                nXObject1 = pmiRadialDimensionBuilder1.Commit()
 
-            suppressPMIBuilder1 = workPart.PmiManager.CreateSuppressPmibuilder()
-            suppressPMIBuilder1.SuppressionMethod = NXOpen.Annotations.SuppressPMIBuilder.SuppressionMethodType.Manual
-            theSession.SetUndoMarkName(markId1, "Suppress PMI Object Dialog")
+                suppressPMIBuilder1 = workPart.PmiManager.CreateSuppressPmibuilder()
+                suppressPMIBuilder1.SuppressionMethod = NXOpen.Annotations.SuppressPMIBuilder.SuppressionMethodType.Manual
+                theSession.SetUndoMarkName(markId1, "Suppress PMI Object Dialog")
 
-            added1 = suppressPMIBuilder1.SelectPMIObjects.Add(nXObject1)
-            nXObject2 = suppressPMIBuilder1.Commit()
-            suppressPMIBuilder1.Destroy()
-            
-            dimension_value = ""
-            if isinstance(nXObject1, NXOpen.Annotations.Dimension):
-                try:
-                    
-                    dimension_value = nXObject1.GetMeasurement().Value
-                    if isinstance(dimension_value, tuple):
-                        dimension_value = dimension_value[0]
-                    dimension_value = float(dimension_value)
-                    
-                    dim_text = str(nXObject1.GetDimensionText()).upper()
-                    
-                    
-                    if ('R' in dim_text or 'RAD' in dim_text) and not ('Ø' in dim_text or 'DIA' in dim_text):
-                        dimension_value *= 2
-                        dim_type = "(converted from Radius)"
-                    else:
-                        dim_type = "(Diameter)"
-                    
-                    dimension_value = f"{dimension_value:.2f}"
-                    
-                except:
+                added1 = suppressPMIBuilder1.SelectPMIObjects.Add(nXObject1)
+                nXObject2 = suppressPMIBuilder1.Commit()
+                suppressPMIBuilder1.Destroy()
+                
+                dimension_value = ""
+                if isinstance(nXObject1, NXOpen.Annotations.Dimension):
                     try:
-                        dimension_text = nXObject1.GetDimensionText()
-                        import re
-                        numeric_text = re.sub(r"[^\d.]", "", str(dimension_text))
-                        if numeric_text:
-                            dimension_value = f"{float(numeric_text):.2f}"
+                        
+                        dimension_value = nXObject1.GetMeasurement().Value
+                        if isinstance(dimension_value, tuple):
+                            dimension_value = dimension_value[0]
+                        dimension_value = float(dimension_value)
+                        
+                        dim_text = str(nXObject1.GetDimensionText()).upper()
+                        
+                        
+                        if ('R' in dim_text or 'RAD' in dim_text) and not ('Ø' in dim_text or 'DIA' in dim_text):
+                            dimension_value *= 2
+                            dim_type = "(converted from Radius)"
                         else:
-                            dimension_value = "Unable to retrieve value"
+                            dim_type = "(Diameter)"
+                        
+                        dimension_value = f"{dimension_value:.2f}"
+                        
                     except:
-                        dimension_value = "Unable to retrieve value"
-            
-            info_msg = f"EXPANSION OD/ID: {dimension_value} mm {dim_type if 'dim_type' in locals() else ''}"
-            lw.Open()
-            lw.WriteLine(info_msg)
+                        try:
+                            dimension_text = nXObject1.GetDimensionText()
+                            import re
+                            numeric_text = re.sub(r"[^\d.]", "", str(dimension_text))
+                            if numeric_text:
+                                dimension_value = f"{float(numeric_text):.2f}"
+                            else:
+                                dimension_value = "Unable to retrieve value"
+                        except:
+                            dimension_value = "Unable to retrieve value"
+                
+                info_msg = f"EXPANSION OD/ID: {dimension_value} mm {dim_type if 'dim_type' in locals() else ''}"
+                lw.Open()
+                lw.WriteLine(info_msg)
 
-            theSession.DeleteUndoMark(markId1, None)
-            pmiRadialDimensionBuilder1.Destroy()
-            
+                theSession.DeleteUndoMark(markId1, None)
+                pmiRadialDimensionBuilder1.Destroy()
+                pass
+
         elif response_expansion == 2:
-                response = theUI.NXMessageBox.Show(
-                    "Create OD/ID Dimension For Expansion", NXOpen.NXMessageBox.DialogType.Information,
-                    "No OD/ID Dimension Created for expansion.")
+            response = theUI.NXMessageBox.Show(
+                "Create OD/ID Dimension For Expansion", NXOpen.NXMessageBox.DialogType.Information,
+                "No OD/ID Dimension Created for expansion.")
                 
 
 def select_face(theUI, title):
