@@ -16,6 +16,8 @@ def main():
     workPart.ModelingViews.WorkView.Orient(NXOpen.View.Canned.Isometric, NXOpen.View.ScaleAdjustment.Fit)
     workPart.ModelingViews.WorkView.RenderingStyle = NXOpen.View.RenderingStyleType.WireframeWithDimEdges
 
+    intial_message = theUI.NXMessageBox.Show('Before Starting', NXOpen.NXMessageBox.DialogType.Information, 'Please, make sure that all the components are united and without unrecognizable errors')
+
     response, selected_face = select_face(theUI, "Select Tube/Hose/Sleeve for Centerline")
 
     if response == NXOpen.Selection.Response.Ok:
