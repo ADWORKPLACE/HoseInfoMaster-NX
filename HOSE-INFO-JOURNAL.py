@@ -165,23 +165,14 @@ def main():
 
         if response == 1:
             
-            total_expansion_length = 0.0
-            expansion_faces = []
-    
             while True:
                 response2, selobj = select_face(theUI, "Select Tube/Hose/Sleeve Expansion")
-        
+                
                 if response2 != NXOpen.Selection.Response.Ok:
                     break  
-
-                expansion_faces.append(selobj)
-
-            for face in expansion_faces:
-                length = process_face(workPart, theUI, selobj)
-                total_expansion_length += length  
+                
+                process_face(workPart, theUI, selobj)
             
-            lw.Open()
-            lw.WriteLine(f"TOTAL EXPANSION LENGTH: {total_expansion_length:.2f} mm") 
 
             selection = theUI.SelectionManager
 
@@ -409,8 +400,7 @@ def process_face(workPart, theUI, face):
     virtualCurveBuilder1.CurveFitData.AngleTolerance = 0.5
     virtualCurveBuilder1.Type = NXOpen.Features.VirtualCurveBuilder.Types.TubeCenterline
 
-    ruleOptions = workPart.ScRuleFactory.CreateRuleOptions()
-    faceTangentRule1 = workPart.ScRuleFactory.CreateRuleFaceTangent([face], [], 0.5, ruleOptions)
+    faceTangentRule1 = workPart.ScRuleFactory.CreateRuleFaceTangent(face, [], 0.5, workPart.ScRuleFactory.CreateRuleOptions())
     virtualCurveBuilder1.TubeFaces.ReplaceRules([faceTangentRule1], False)
 
     nXObject1 = virtualCurveBuilder1.Commit()
@@ -420,42 +410,28 @@ def process_face(workPart, theUI, face):
         theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, "No Curves Generated.")
         return
 
-    section = workPart.Sections.CreateSection(0.0095, 0.01, 0.5)
-    section.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.OnlyCurves)
-    
-    curveRules = []
+    total_length = 0.0
 
     for curve in curves:
-        curveRule = workPart.ScRuleFactory.CreateRuleBaseCurveDumb([curve], ruleOptions)
-        curveRules.append(curveRule)
-    
-    helpPoint = NXOpen.Point3d(0.0, 0.0, 0.0)
-    section.AddToSection(curveRules, curves[0], None, None, helpPoint, NXOpen.Section.Mode.Create, False)
-    
-    compositeCurve = workPart.Curves.CreateSmartCompositeCurve(section, 
-                                                             NXOpen.SmartObject.UpdateOption.WithinModeling, 
-                                                             0.0095)
-    compositeCurve.RemoveViewDependency()
-        
-    try:
-            if hasattr(compositeCurve, 'GetLength'):
-                total_length = compositeCurve.GetLength()
-            
+        try:
+            if hasattr(curve, 'GetLength'):
+                length = curve.GetLength()
             else:
                 ufSession = NXOpen.UF.UFSession.GetUFSession()
-                measure = ufSession.Modl.AskLengthOfObject(compositeCurve.Tag)
-                total_length = measure.length
+                measure = ufSession.Modl.AskLengthOfObject(curve.Tag)
+                length = measure.length
 
-    except Exception as e:
+            total_length += length
+
+        except Exception as e:
             theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, f"Error while measuring: {str(e)}")
             return
 
-            centerline = nXObject1
+        centerline = nXObject1
 
-            removeParametersBuilder2 = workPart.Features.CreateRemoveParametersBuilder()
-            added2 = removeParametersBuilder2.Objects.Add(centerline)
-            nXObject2 = removeParametersBuilder2.Commit()
-        
-            return total_length
+        removeParametersBuilder2 = workPart.Features.CreateRemoveParametersBuilder()
+        added2 = removeParametersBuilder2.Objects.Add(centerline)
+        nXObject2 = removeParametersBuilder2.Commit()
+    
 
 main()
