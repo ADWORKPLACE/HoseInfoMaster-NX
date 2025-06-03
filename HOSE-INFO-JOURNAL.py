@@ -166,16 +166,19 @@ def main():
         if response == 1:
             
             total_expansion_length = 0.0
-            
+            expansion_faces = []
     
             while True:
                 response2, selobj = select_face(theUI, "Select Tube/Hose/Sleeve Expansion")
         
                 if response2 != NXOpen.Selection.Response.Ok:
                     break  
-            
-            length = process_face(workPart, theUI, selobj)
-            total_expansion_length += length  
+
+                expansion_faces.append(selobj)
+
+            for face in expansion_faces:
+                length = process_face(workPart, theUI, selobj)
+                total_expansion_length += length  
             
             lw.Open()
             lw.WriteLine(f"TOTAL EXPANSION LENGTH: {total_expansion_length:.2f} mm") 
@@ -406,7 +409,8 @@ def process_face(workPart, theUI, face):
     virtualCurveBuilder1.CurveFitData.AngleTolerance = 0.5
     virtualCurveBuilder1.Type = NXOpen.Features.VirtualCurveBuilder.Types.TubeCenterline
 
-    faceTangentRule1 = workPart.ScRuleFactory.CreateRuleFaceTangent(face, [], 0.5, workPart.ScRuleFactory.CreateRuleOptions())
+    ruleOptions = workPart.ScRuleFactory.CreateRuleOptions()
+    faceTangentRule1 = workPart.ScRuleFactory.CreateRuleFaceTangent([face], [], 0.5, ruleOptions)
     virtualCurveBuilder1.TubeFaces.ReplaceRules([faceTangentRule1], False)
 
     nXObject1 = virtualCurveBuilder1.Commit()
@@ -419,7 +423,6 @@ def process_face(workPart, theUI, face):
     section = workPart.Sections.CreateSection(0.0095, 0.01, 0.5)
     section.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.OnlyCurves)
     
-    ruleOptions = workPart.ScRuleFactory.CreateRuleOptions()
     curveRules = []
 
     for curve in curves:
