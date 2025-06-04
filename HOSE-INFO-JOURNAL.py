@@ -1,5 +1,6 @@
 import math
 import NXOpen
+import NXOpen.UF
 import NXOpen.Features
 import NXOpen.GeometricUtilities
 import NXOpen.Annotations
@@ -20,6 +21,9 @@ def main():
 
     if response == NXOpen.Selection.Response.Ok:
 
+        initial_centerline = None
+        initial_length = 0.0
+
         virtualCurveBuilder1 = workPart.Features.CreateVirtualCurveBuilder(NXOpen.Features.VirtualCurve.Null)
         virtualCurveBuilder1.CurveFitData.Tolerance = 0.01
         virtualCurveBuilder1.CurveFitData.AngleTolerance = 0.5
@@ -37,21 +41,23 @@ def main():
             return
         
         total_length = 0.0
+        all_curves = []
         
         for curve in curves:
             try:
                 if hasattr(curve, 'GetLength'):
                     length = curve.GetLength()
                 else:
-                    ufSession = NXOpen.UF.UFSession.GetUFSession()
-                    measure = ufSession.Modl.AskLengthOfObject(curve.Tag)
+                    theUfSession = NXOpen.UF.UFSession.GetUFSession()
+                    measure = theUfSession.Modl.AskLengthOfObject(curve.Tag)
                     length = measure.length
-                
+
                 total_length += length
-                
+                all_curves.append(curve)
+
             except Exception as e:
-                theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, f"Error while measuring: {str(e)}")
-                return
+                    theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, f"Error while measuring: {str(e)}")
+                    return
 
         workPart.ModelingViews.WorkView.Orient(NXOpen.View.Canned.Isometric, NXOpen.View.ScaleAdjustment.Fit)
         workPart.ModelingViews.WorkView.RenderingStyle = NXOpen.View.RenderingStyleType.WireframeWithDimEdges
@@ -129,7 +135,6 @@ def main():
                     
                     dim_text = str(nXObject1.GetDimensionText()).upper()
                     
-                    
                     if ('R' in dim_text or 'RAD' in dim_text) and not ('Ø' in dim_text or 'DIA' in dim_text):
                         dimension_value *= 2
                         dim_type = "(converted from Radius)"
@@ -171,9 +176,27 @@ def main():
                 if response2 != NXOpen.Selection.Response.Ok:
                     break  
                 
-                process_face(workPart, theUI, selobj)
+                expansion_curves = process_face(workPart, theUI, selobj)
+                if expansion_curves:
+                    all_curves.extend(expansion_curves)
             
+            total_combined_length = 0.0
+            for curve in all_curves:
+                try:
+                    if hasattr(curve, 'GetLength'):
+                        length = curve.GetLength()
+                    else:
+                        theUfSession = NXOpen.UF.UFSession.GetUFSession()
+                        measure = theUfSession.Modl.AskLengthOfObject(curve.Tag)
+                        length = measure.length
+                    
+                    total_combined_length += length
+                
+                except Exception as e:
+                    theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, f"Error while measuring: {str(e)}")
+                    return
 
+            # Create edge diameter dimension for expansion (existing code remains the same)
             selection = theUI.SelectionManager
 
             response3, selected_objects = theUI.SelectionManager.SelectObjects(
@@ -281,108 +304,42 @@ def main():
       
             pass
 
-        # Create a point on the centerline - Modifty to make the note
+        # Create a point on the centerline - Modifty to make the note 
 
-        markId1 = theSession.SetUndoMark(NXOpen.Session.MarkVisibility.Visible, "Create Point On the Curve")
-        section = workPart.Sections.CreateSection(0.0095, 0.01, 0.5)
-        section.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.OnlyCurves)
+        if all_curves:
+            markId1 = theSession.SetUndoMark(NXOpen.Session.MarkVisibility.Visible, "Create Point On the Curve")
+            section = workPart.Sections.CreateSection(0.0095, 0.01, 0.5)
+            section.SetAllowedEntityTypes(NXOpen.Section.AllowTypes.OnlyCurves)
 
-        response, selected_objects = theUI.SelectionManager.SelectObjects(
-            'Select Curve', 
-            'Select Centerline', 
-            NXOpen.Selection.SelectionScope.AnyInAssembly, 
-            False, 
-            [NXOpen.Selection.SelectionType.Curves])
-        
-        if response != NXOpen.Selection.Response.Ok or not selected_objects:
-            return
-        
-        ruleOptions = workPart.ScRuleFactory.CreateRuleOptions()
-        ruleOptions.SetSelectedFromInactive(False)
-        
-        curves = [obj for obj in selected_objects if isinstance(obj, NXOpen.IBaseCurve)]
-        if not curves:
-            return
-        
-        curveRule = workPart.ScRuleFactory.CreateRuleBaseCurveDumb(curves, ruleOptions)
-        ruleOptions.Dispose()
-        
-        section.AllowSelfIntersection(True)
-        section.AllowDegenerateCurves(False)
-        
-        helpPoint = NXOpen.Point3d(0.0, 0.0, 0.0)
-        section.AddToSection([curveRule], curves[0], None, None, helpPoint, NXOpen.Section.Mode.Create, False)
-        
-        compositeCurve = workPart.Curves.CreateSmartCompositeCurve(section, 
-                                                                 NXOpen.SmartObject.UpdateOption.WithinModeling, 
-                                                                 0.0095)
-        compositeCurve.RemoveViewDependency()
-        
-        expression = workPart.Expressions.CreateSystemExpressionWithUnits("50", NXOpen.Unit.Null)
-        scalar = workPart.Scalars.CreateScalarExpression(expression, 
-                                                       NXOpen.Scalar.DimensionalityType.NotSet, 
-                                                       NXOpen.SmartObject.UpdateOption.WithinModeling)
-        
-        point = workPart.Points.CreatePoint(compositeCurve, scalar, 
-                                          NXOpen.PointCollection.PointOnCurveLocationOption.PercentArcLength, 
-                                          None, 
-                                          NXOpen.SmartObject.UpdateOption.WithinModeling)
-        point.RemoveViewDependency()
-        
-        pointFeatureBuilder = workPart.BaseFeatures.CreatePointFeatureBuilder(None)
-        pointFeatureBuilder.Point = point
-        
-        pointFeatureBuilder.Commit()
-        theSession.SetUndoMarkName(markId1, "Point created")
-        
-        coordinates = point.Coordinates
-        centerline_point = NXOpen.Point3d(coordinates.X, coordinates.Y, coordinates.Z)
-
-        annotation_centerline = workPart.MeasureManager.CreateNoteAnnotation(centerline_point, [f"Length: {total_length:.2f} mm"])
-        editSettingsBuilder = workPart.SettingsManager.CreateAnnotationEditSettingsBuilder([annotation_centerline])
-        editSettingsBuilder.AnnotationStyle.LetteringStyle.GeneralTextColor = workPart.Colors.Find("Black")
-        editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowheadColor = workPart.Colors.Find("Black")
-        editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowLineColor = workPart.Colors.Find("Black")
-        editSettingsBuilder.Commit()
-        editSettingsBuilder.Destroy()
-
-        if response == NXOpen.Selection.Response.Ok and selected_objects:
-            centerline = selected_objects[0]
-            mid_point = point 
-
-            removeParametersBuilder1 = workPart.Features.CreateRemoveParametersBuilder()
-            added1 = removeParametersBuilder1.Objects.Add(centerline)
-            nXObject1 = removeParametersBuilder1.Commit()
+            curve_for_annotation = all_curves[0]
+            expression = workPart.Expressions.CreateSystemExpressionWithUnits("50", NXOpen.Unit.Null)
+            scalar = workPart.Scalars.CreateScalarExpression(expression, 
+                                                           NXOpen.Scalar.DimensionalityType.NotSet, 
+                                                           NXOpen.SmartObject.UpdateOption.WithinModeling)
             
-            if hasattr(centerline, 'GetLength'):
-                selected_object = centerline.GetLength()
-            else:
-                evaluator = centerline.Evaluator
-                
-            if hasattr(centerline, 'Evaluator'):
-                evaluator = centerline.Evaluator
-                mid_param = (evaluator.GetStartParameter() + evaluator.GetEndParameter()) / 2
-                point = evaluator.GetPoint(mid_param)
-                mid_point = NXOpen.Point3d(point.X, point.Y, point.Z)
+            point = workPart.Points.CreatePoint(curve_for_annotation, scalar, 
+                                              NXOpen.PointCollection.PointOnCurveLocationOption.PercentArcLength, 
+                                              None, 
+                                              NXOpen.SmartObject.UpdateOption.WithinModeling)
+            point.RemoveViewDependency()
+            
+            pointFeatureBuilder = workPart.BaseFeatures.CreatePointFeatureBuilder(None)
+            pointFeatureBuilder.Point = point
+            
+            pointFeatureBuilder.Commit()
+            theSession.SetUndoMarkName(markId1, "Point created")
+            
+            coordinates = point.Coordinates
+            annotation_point = NXOpen.Point3d(coordinates.X, coordinates.Y, coordinates.Z)
 
-            elif isinstance(centerline, NXOpen.Line):
-                start = centerline.StartPoint
-                end = centerline.EndPoint
-                mid_point = NXOpen.Point3d(
-                    (start.X + end.X)/2,
-                    (start.Y + end.Y)/2,
-                    (start.Z + end.Z)/2
-                )
-
-                annotation_centerline = workPart.MeasureManager.CreateNoteAnnotation(mid_point, [f"Length: {total_length:.2f} mm"])
-                editSettingsBuilder = workPart.SettingsManager.CreateAnnotationEditSettingsBuilder([annotation_centerline])
-                editSettingsBuilder.AnnotationStyle.LetteringStyle.GeneralTextColor = workPart.Colors.Find("Black")
-                editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowheadColor = workPart.Colors.Find("Black")
-                editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowLineColor = workPart.Colors.Find("Black")
-                editSettingsBuilder.Commit()
-                editSettingsBuilder.Destroy()
-
-                workPart.ModelingViews.WorkView.Orient(NXOpen.View.Canned.Isometric, NXOpen.View.ScaleAdjustment.Fit)
+            # Create annotation with total length
+            annotation_centerline = workPart.MeasureManager.CreateNoteAnnotation(annotation_point, [f"Length: {total_combined_length:.2f} mm"])
+            editSettingsBuilder = workPart.SettingsManager.CreateAnnotationEditSettingsBuilder([annotation_centerline])
+            editSettingsBuilder.AnnotationStyle.LetteringStyle.GeneralTextColor = workPart.Colors.Find("Black")
+            editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowheadColor = workPart.Colors.Find("Black")
+            editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowLineColor = workPart.Colors.Find("Black")
+            editSettingsBuilder.Commit()
+            editSettingsBuilder.Destroy()
                 
 
 def select_face(theUI, title):
@@ -408,30 +365,32 @@ def process_face(workPart, theUI, face):
 
     if not curves:
         theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, "No Curves Generated.")
-        return
+        return None
 
-    total_length = 0.0
+    expansion_curves = []
+    
 
     for curve in curves:
         try:
             if hasattr(curve, 'GetLength'):
                 length = curve.GetLength()
             else:
-                ufSession = NXOpen.UF.UFSession.GetUFSession()
-                measure = ufSession.Modl.AskLengthOfObject(curve.Tag)
+                theUfSession = NXOpen.UF.UFSession.GetUFSession()
+                measure = theUfSession.Modl.AskLengthOfObject(curve.Tag)
                 length = measure.length
 
-            total_length += length
+            expansion_curves.append(curve)
 
         except Exception as e:
             theUI.NXMessageBox.Show("Error", NXOpen.NXMessageBox.DialogType.Error, f"Error while measuring: {str(e)}")
-            return
+            return None
 
-        centerline = nXObject1
+    centerline = nXObject1
+    removeParametersBuilder2 = workPart.Features.CreateRemoveParametersBuilder()
+    added2 = removeParametersBuilder2.Objects.Add(centerline)
+    nXObject2 = removeParametersBuilder2.Commit()
 
-        removeParametersBuilder2 = workPart.Features.CreateRemoveParametersBuilder()
-        added2 = removeParametersBuilder2.Objects.Add(centerline)
-        nXObject2 = removeParametersBuilder2.Commit()
+    return expansion_curves
     
 
 main()
