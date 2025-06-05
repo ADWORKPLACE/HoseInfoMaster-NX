@@ -342,6 +342,9 @@ def main():
             editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowLineColor = workPart.Colors.Find("Black")
             editSettingsBuilder.Commit()
             editSettingsBuilder.Destroy()
+
+            lw.Open()
+            lw.WriteLine(f"Length: {length_to_display:.2f} mm")
                 
 
 def select_face(theUI, title):
