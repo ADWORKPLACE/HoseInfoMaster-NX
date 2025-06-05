@@ -333,7 +333,9 @@ def main():
             annotation_point = NXOpen.Point3d(coordinates.X, coordinates.Y, coordinates.Z)
 
             # Create annotation with total length
-            annotation_centerline = workPart.MeasureManager.CreateNoteAnnotation(annotation_point, [f"Length: {total_combined_length:.2f} mm"])
+            
+            length_to_display = total_combined_length if 'total_combined_length' in locals() else total_length
+            annotation_centerline = workPart.MeasureManager.CreateNoteAnnotation(annotation_point, [f"Length: {length_to_display:.2f} mm"])
             editSettingsBuilder = workPart.SettingsManager.CreateAnnotationEditSettingsBuilder([annotation_centerline])
             editSettingsBuilder.AnnotationStyle.LetteringStyle.GeneralTextColor = workPart.Colors.Find("Black")
             editSettingsBuilder.AnnotationStyle.LineArrowStyle.FirstArrowheadColor = workPart.Colors.Find("Black")
